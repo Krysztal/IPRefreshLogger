@@ -18,7 +18,7 @@ public class Worker : BackgroundService
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
 
-        //ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
+        ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
