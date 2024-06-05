@@ -27,27 +27,27 @@ public class Worker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            //try
-            //{
-            //    //using (var httpClient = _httpClientFactory.CreateClient())
-            //    using (var httpClient = new HttpClient(CreateHandler()))
-            //    {
-            //        using (var memoryStream = new MemoryStream())
-            //        {
-            //            var ip = await httpClient.GetStringAsync("https://api.ipify.org", stoppingToken);
-            //            byte[] bytes = Encoding.UTF8.GetBytes(ip);
-            //            memoryStream.Write(bytes, 0, bytes.Length);
-            //            memoryStream.Position = 0;
+            try
+            {
+                //using (var httpClient = _httpClientFactory.CreateClient())
+                using (var httpClient = new HttpClient(CreateHandler()))
+                {
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        var ip = await httpClient.GetStringAsync("https://api.ipify.org", stoppingToken);
+                        byte[] bytes = Encoding.UTF8.GetBytes(ip);
+                        memoryStream.Write(bytes, 0, bytes.Length);
+                        memoryStream.Position = 0;
 
-            //            UploadFileToSMB("192.168.0.100", "nextnas", "ip.txt", bytes);
-            //        }
-            //    }
-            //}
-            //catch (Exception ex)
-            //{
-            //    Console.WriteLine(ex.ToString());
-            //    File.WriteAllText("log.txt", ex.ToString());
-            //}
+                        Console.WriteLine(ip);
+                        //UploadFileToSMB("192.168.0.100", "nextnas", "ip.txt", bytes);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
             Console.WriteLine("test");
 
             await Task.Delay(10000, stoppingToken);
