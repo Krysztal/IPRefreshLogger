@@ -23,20 +23,12 @@ public class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var handler = new SocketsHttpHandler
-        {
-            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
-            {
-                RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true
-            }
-        };
-
         string path = _configuration.GetRequiredSection("filePath").Value!;
 
         while (!stoppingToken.IsCancellationRequested)
         {
             //using (var httpClient = _httpClientFactory.CreateClient())
-            using (var httpClient = new HttpClient(handler))
+            using (var httpClient = new HttpClient(CreateHandler()))
             {
                 using (var memoryStream = new MemoryStream())
                 {
@@ -53,6 +45,17 @@ public class Worker : BackgroundService
 
             await Task.Delay(10000, stoppingToken);
         }
+    }
+
+    SocketsHttpHandler CreateHandler()
+    {
+        return new SocketsHttpHandler
+        {
+            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true
+            }
+        };
     }
 
     void UploadFileToSMB(string serverName, string shareName, string remoteFilePath, byte[] ip)
