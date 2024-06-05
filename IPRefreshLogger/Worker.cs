@@ -27,21 +27,27 @@ public class Worker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            //using (var httpClient = _httpClientFactory.CreateClient())
-            using (var httpClient = new HttpClient(CreateHandler()))
+            try
             {
-                using (var memoryStream = new MemoryStream())
+                //using (var httpClient = _httpClientFactory.CreateClient())
+                using (var httpClient = new HttpClient(CreateHandler()))
                 {
-                    var ip = await httpClient.GetStringAsync("https://api.ipify.org", stoppingToken);
-                    byte[] bytes = Encoding.UTF8.GetBytes(ip);
-                    memoryStream.Write(bytes, 0, bytes.Length);
-                    memoryStream.Position = 0;
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        var ip = await httpClient.GetStringAsync("https://api.ipify.org", stoppingToken);
+                        byte[] bytes = Encoding.UTF8.GetBytes(ip);
+                        memoryStream.Write(bytes, 0, bytes.Length);
+                        memoryStream.Position = 0;
 
-                    UploadFileToSMB("192.168.0.100", "nextnas", "ip.txt", bytes);
+                        UploadFileToSMB("192.168.0.100", "nextnas", "ip.txt", bytes);
+                    }
                 }
             }
-
-            
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+                File.WriteAllText("log.txt", ex.ToString());
+            }
 
             await Task.Delay(10000, stoppingToken);
         }
