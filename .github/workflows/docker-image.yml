@@ -16,6 +16,6 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build the Docker image and push
       run: |
-        docker login --username krysztal --password ${{ secrets.PAT }}
+        docker login --username krysztal --password ${{ secrets.DH_PAT }}
         docker build . --tag krysztal/iprefreshlogger:latest
         docker push krysztal/iprefreshlogger:latest
