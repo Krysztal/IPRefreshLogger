@@ -1,68 +1,64 @@
+using Microsoft.Extensions.Options;
 using SMBLibrary;
 using SMBLibrary.Client;
-using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 
 namespace IPRefreshLogger;
 
 public class Worker : BackgroundService
 {
+    private const string GetIPUrl = "https://api.ipify.org";
     private readonly ILogger<Worker> _logger;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IConfiguration _configuration;
+    private readonly ApplicationSettings _settings;
 
-    public Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    public Worker(ILogger<Worker> logger, IOptions<ApplicationSettings> options)
     {
         _logger = logger;
-        _httpClientFactory = httpClientFactory;
-        _configuration = configuration;
-
-        ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
+        _settings = options.Value;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        string path = _configuration.GetRequiredSection("filePath").Value!;
-
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                //using (var httpClient = _httpClientFactory.CreateClient())
-                using (var httpClient = new HttpClient(CreateHandler()))
-                {
-                    using (var memoryStream = new MemoryStream())
-                    {
-                        var ip = await httpClient.GetStringAsync("https://api.ipify.org", stoppingToken);
-                        byte[] bytes = Encoding.UTF8.GetBytes(ip);
-                        memoryStream.Write(bytes, 0, bytes.Length);
-                        memoryStream.Position = 0;
+                using var httpClient = new HttpClient(CreateHandler());
+                using var memoryStream = new MemoryStream();
 
-                        Console.WriteLine(ip);
-                        UploadFileToSMB("192.168.0.100", "nextnas", "ip.txt", bytes);
-                    }
-                }
+                var ip = await httpClient.GetStringAsync(GetIPUrl, stoppingToken);
+                byte[] bytes = Encoding.UTF8.GetBytes(ip);
+                memoryStream.Write(bytes, 0, bytes.Length);
+                memoryStream.Position = 0;
+
+                Console.WriteLine(ip);
+                UploadFileToSMB(_settings.SMBServerName, _settings.SMBShare, _settings.FilePath, bytes);
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                _logger.LogError(ex.ToString(), ex);
             }
-            Console.WriteLine("test");
 
-            await Task.Delay(10000, stoppingToken);
+            await Task.Delay(TimeSpan.FromMinutes(_settings.UpdateInterval), stoppingToken);
         }
     }
 
     SocketsHttpHandler CreateHandler()
     {
-        return new SocketsHttpHandler
+        if (_settings.IgnoreCertificateValidation)
         {
-            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            return new SocketsHttpHandler();
+        }
+        else
+        {
+            return new SocketsHttpHandler
             {
-                RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true
-            }
-        };
+                SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+                {
+                    RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true
+                }
+            };
+        }
     }
 
     void UploadFileToSMB(string serverName, string shareName, string remoteFilePath, byte[] ip)
@@ -72,35 +68,32 @@ public class Worker : BackgroundService
 
         if (isConnected)
         {
-            // Attempt anonymous login
-            NTStatus loginStatus = client.Login(String.Empty, "krysztal", "1111");
+            NTStatus loginStatus = client.Login(string.Empty, _settings.SMBLogin, _settings.SMBPassword);
 
             if (loginStatus == NTStatus.STATUS_SUCCESS)
             {
-                NTStatus status;
-                var fileStore = client.TreeConnect(shareName, out status);
+                var fileStore = client.TreeConnect(shareName, out NTStatus status);
                 if (status == NTStatus.STATUS_SUCCESS)
                 {
-                    FileStatus fileStatus;
-                    status = fileStore.CreateFile(out object fileHandle, out fileStatus, remoteFilePath, AccessMask.GENERIC_WRITE, SMBLibrary.FileAttributes.Normal, ShareAccess.Write, CreateDisposition.FILE_OVERWRITE_IF, CreateOptions.FILE_NON_DIRECTORY_FILE, null);
+                    status = fileStore.CreateFile(out object fileHandle, out _, remoteFilePath, AccessMask.GENERIC_WRITE, SMBLibrary.FileAttributes.Normal, ShareAccess.Write, CreateDisposition.FILE_OVERWRITE_IF, CreateOptions.FILE_NON_DIRECTORY_FILE, null);
                     if (status == NTStatus.STATUS_SUCCESS)
                     {
-                        status = fileStore.WriteFile(out int numberOfBytesWritten, fileHandle, 0, ip);
+                        status = fileStore.WriteFile(out _, fileHandle, 0, ip);
 
                         if (status == NTStatus.STATUS_SUCCESS)
                         {
-                            Console.WriteLine("File uploaded successfully.");
+                            _logger.LogInformation("IP saved.");
                         }
                         else
                         {
-                            Console.WriteLine("Failed to write to the file: " + status);
+                            _logger.LogError($"Failed to write to the file: {status}");
                         }
 
                         fileStore.CloseFile(fileHandle);
                     }
                     else
                     {
-                        Console.WriteLine("Failed to create the file: " + status);
+                        _logger.LogError($"Failed to create the file: {status}");
                     }
 
                     fileStore.Disconnect();
@@ -110,14 +103,14 @@ public class Worker : BackgroundService
             }
             else
             {
-                Console.WriteLine("Failed to login as anonymous: " + loginStatus);
+                _logger.LogError($"Failed to login: {loginStatus}");
             }
 
             client.Disconnect();
         }
         else
         {
-            Console.WriteLine("Failed to connect to the server.");
+            _logger.LogError("Failed to connect to the server.");
         }
     }
 }
