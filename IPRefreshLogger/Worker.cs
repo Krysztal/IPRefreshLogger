@@ -40,7 +40,7 @@ public class Worker : BackgroundService
                         memoryStream.Position = 0;
 
                         Console.WriteLine(ip);
-                        //UploadFileToSMB("192.168.0.100", "nextnas", "ip.txt", bytes);
+                        UploadFileToSMB("192.168.0.100", "nextnas", "ip.txt", bytes);
                     }
                 }
             }
